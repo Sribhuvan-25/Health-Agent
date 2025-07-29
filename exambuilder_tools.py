@@ -12,9 +12,9 @@ import base64
 from typing import Dict, Optional
 
 # ExamBuilder API Configuration
-BASE_URL = ""
-API_KEY = ""
-API_SECRET = ""
+BASE_URL = "https://instructor.exambuilder.com/v2"
+API_KEY = "FE0F8C82239FF183"
+API_SECRET = "A227A6838F3D180A15E6D8ED"
 
 # Create base64 encoded credentials for Basic Auth
 credentials = f"{API_KEY}:{API_SECRET}"
@@ -63,7 +63,20 @@ def get_instructor_id() -> Dict:
     
     ✅ VERIFIED WORKING
     """
-    return _make_request("GET", "validate.json")
+    # The validate.json endpoint is at the root level, not under /v2/
+    url = "https://instructor.exambuilder.com/v2/validate.json"
+    
+    try:
+        response = requests.get(url, headers=AUTH_HEADERS)
+        response.raise_for_status()
+        return response.json()
+    
+    except requests.exceptions.RequestException as e:
+        return {
+            "error": f"API request failed: {str(e)}",
+            "status": False,
+            "returnCode": "API_ERROR"
+        }
 
 def list_exams(instructor_id: str, exam_name: Optional[str] = None, exam_state: str = "all") -> Dict:
     """
@@ -250,8 +263,39 @@ def schedule_exam(instructor_id: str, exam_id: str, user_id: str) -> Dict:
     🔧 READY FOR TESTING
     """
     endpoint = f"instructor/{instructor_id}/student/exam/{exam_id}/schedule.json"
-    data = {"userId": user_id}
-    return _make_request("POST", endpoint, data=data)
+    data = {"userId": user_id}  # Fixed: use "userId" as shown in API docs
+    
+    result = _make_request("POST", endpoint, data=data)
+    
+    # Handle specific error cases based on API documentation
+    if "error" in result:
+        error_msg = result["error"]
+        if "STUDENT_ALREADY_SCHEDULED" in error_msg:
+            return {
+                "status": False,
+                "message": "This student is already scheduled to take this exam. Cannot schedule an exam in progress. Delete the exam attempt and reschedule or reset an exam in progress.",
+                "returnCode": "STUDENT_ALREADY_SCHEDULED"
+            }
+        elif "INVALID_INSTRUCTOR" in error_msg:
+            return {
+                "status": False,
+                "message": "The Instructor ID was invalid",
+                "returnCode": "INVALID_INSTRUCTOR"
+            }
+        elif "ROUTE_PERMISSION_ERROR" in error_msg:
+            return {
+                "status": False,
+                "message": "The Super User of this account did not grant permission to access this resource",
+                "returnCode": "ROUTE_PERMISSION_ERROR"
+            }
+        elif "API_AUTHENTICATION_FAILED" in error_msg:
+            return {
+                "status": False,
+                "message": "The API Key and API Secret combination was invalid",
+                "returnCode": "API_AUTHENTICATION_FAILED"
+            }
+    
+    return result
 
 def get_exam_attempt(instructor_id: str, user_exam_id: str) -> Dict:
     """
@@ -280,6 +324,24 @@ def get_student_exam_statistics(instructor_id: str, student_id: str, user_exam_i
     endpoint = f"instructor/{instructor_id}/student/{student_id}/userexam/{user_exam_id}/stats.json"
     return _make_request("GET", endpoint)
 
+def unschedule_exam(instructor_id: str, user_exam_id: str) -> Dict:
+    """
+    Unschedule an exam (delete exam attempt) for a specific student.
+    
+    This request can delete:
+    - An exam that has not been started yet
+    - An exam that has been started but not completed
+    - A completed exam
+    
+    Args:
+        instructor_id: The instructor ID from get_instructor_id()
+        user_exam_id: The user exam ID (can be obtained by using the List Scheduled Exams request)
+    
+    🔧 READY FOR TESTING
+    """
+    endpoint = f"instructor/{instructor_id}/student/userexam/{user_exam_id}/unschedule.json"
+    return _make_request("DELETE", endpoint)
+
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
@@ -300,8 +362,9 @@ def search_student_by_student_id(instructor_id: str, student_id: str) -> Dict:
     # Use list_students to search for the student
     result = list_students(instructor_id, student_id=student_id)
     
-    if result.get("status") and result.get("students"):
-        for student in result["students"]:
+    if result.get("status"):
+        students = result.get("students", []) or result.get("student_list", [])
+        for student in students:
             if student.get("STUDENTID", "").lower() == student_id.lower():
                 return {
                     "status": True,

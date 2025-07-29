@@ -176,10 +176,37 @@ def classify_intent_and_extract_info(state: ExamBuilderAgentState) -> ExamBuilde
                 conversation_context += f"Agent: {msg.content}\n"
         conversation_context += "\n"
     
+    # Check if this is a workflow continuation
+    is_workflow_continuation = False
+    workflow_context = {}
+    
+    if len(messages) > 1:
+        # Check if the previous response was a workflow step
+        previous_ai_message = None
+        for msg in reversed(messages[:-1]):
+            if isinstance(msg, AIMessage):
+                previous_ai_message = msg.content
+                break
+        
+        if previous_ai_message:
+            # Check for workflow indicators in the previous response
+            if "Available Active Exams" in previous_ai_message and "Next Step" in previous_ai_message:
+                is_workflow_continuation = True
+                workflow_context["type"] = "exam_selection"
+                # Extract available exams from the previous response
+                if "Serengeti Practice Exam" in previous_ai_message:
+                    workflow_context["available_exams"] = ["Serengeti Practice Exam", "Serengeti Certification"]
+            elif "Please provide your email address" in previous_ai_message:
+                is_workflow_continuation = True
+                workflow_context["type"] = "email_provided"
+    
     prompt = f"""
     Analyze the user's request and extract both the intent and available information for an ExamBuilder system.
     
     {conversation_context}
+    
+    WORKFLOW CONTEXT: {workflow_context if is_workflow_continuation else "None"}
+    IS WORKFLOW CONTINUATION: {is_workflow_continuation}
     
     AVAILABLE OPERATIONS:
     
@@ -197,6 +224,7 @@ def classify_intent_and_extract_info(state: ExamBuilderAgentState) -> ExamBuilde
     SCHEDULING & RESULTS:
     - list_scheduled_exams: List scheduled exams
     - schedule_exam: Schedule an exam for a student
+    - schedule_exam_with_student_id: Schedule an exam using student email (automatic user ID lookup)
     - get_exam_attempt: Get details of a specific exam attempt
     - get_student_exam_statistics: Get exam statistics for a student
     
@@ -233,22 +261,31 @@ def classify_intent_and_extract_info(state: ExamBuilderAgentState) -> ExamBuilde
     - Exam ID: 9aa4177629726a88278209ef12bd5d7b, Name: "Serengeti Certification" (Active)
     
     SPECIAL RULES:
-    1. If user asks about "available exams", "list exams", "show exams" → classify as list_exams
-    2. If user mentions specific exam name like "Pearson" or "Serengeti" → classify as list_exams with exam_name filter
-    3. If user provides exam ID → classify as get_exam
-    4. If user asks about "students", "list students" → classify as list_students
-    5. If user provides user ID or wants specific student info → classify as get_student
-    6. If user asks about "groups", "categories" → classify as list_group_categories
-    7. If user asks "what can you do", "help", "capabilities" → classify as help
-    8. If user asks for "status", "overview" → classify as status
-    9. If user asks about "scheduling", "schedule exam", "book exam" → classify as schedule_exam_workflow
-    10. If user asks about "creating student", "register student", "new student account" → classify as create_student_workflow
-    11. If user asks about "updating", "modifying" student info → classify as update_student
-    12. If user asks about "exam results", "statistics", "attempts" → classify as get_student_exam_statistics
-    13. If user asks about "scheduled exams", "my exams" → classify as list_scheduled_exams
-    14. If user asks to "find student", "search student", "look up student" and provides email → classify as search_student_by_student_id
-    15. If user provides email address in any context → extract it as student_id
-    16. Look at conversation history to combine information from previous messages
+    1. If user mentions "schedule exam" AND provides email address → classify as schedule_exam_with_student_id
+    2. If user mentions "book exam" AND provides email address → classify as schedule_exam_with_student_id
+    3. If user mentions "schedule" AND provides email address → classify as schedule_exam_with_student_id
+    4. If user mentions "schedule [exam name] for [email]" → classify as schedule_exam_with_student_id
+    5. If user mentions "schedule [exam name] for email [email]" → classify as schedule_exam_with_student_id
+    6. If this is a workflow continuation AND user mentions exam name → classify as schedule_exam_with_student_id
+    7. If this is a workflow continuation AND user says "yes" or "schedule" → classify as schedule_exam_with_student_id
+    8. If user asks about "available exams", "list exams", "show exams" → classify as list_exams
+    9. If user mentions specific exam name like "Pearson" or "Serengeti" → classify as list_exams with exam_name filter
+    10. If user provides exam ID → classify as get_exam
+    11. If user asks about "students", "list students" → classify as list_students
+    12. If user provides user ID or wants specific student info → classify as get_student
+    13. If user asks about "groups", "categories" → classify as list_group_categories
+    14. If user asks "what can you do", "help", "capabilities" → classify as help
+    15. If user asks for "status", "overview" → classify as status
+    16. If user asks about "scheduling", "schedule exam", "book exam" → classify as schedule_exam_workflow
+    17. If user asks about "creating student", "register student", "new student account" → classify as create_student_workflow
+    18. If user asks about "updating", "modifying" student info → classify as update_student
+    19. If user asks about "exam results", "statistics", "attempts" → classify as get_student_exam_statistics
+    20. If user asks about "scheduled exams", "my exams" → classify as list_scheduled_exams
+    21. If user asks to "find student", "search student", "look up student" and provides email → classify as search_student_by_student_id
+    22. If user provides email address in any context → extract it as student_id
+    23. If user asks for "student details", "student info", "get student" without providing ID → suggest listing students first
+    24. If user asks for "exam results", "attempt details" without providing IDs → suggest getting scheduled exams first
+    25. Look at conversation history to combine information from previous messages
     
     User request: "{last_message}"
     
@@ -323,7 +360,8 @@ def check_information_completeness(state: ExamBuilderAgentState) -> ExamBuilderA
         "get_student_exam_statistics": ["student_id", "user_exam_id"],
         "search_student_by_student_id": ["student_id"],
         "schedule_exam_workflow": [],  # Will be handled specially
-        "create_student_workflow": []   # Will be handled specially
+        "create_student_workflow": [],   # Will be handled specially
+        "schedule_exam_with_student_id": ["student_id"]  # Student ID (email) is required
     }
     
     if intent not in required_params:
@@ -489,6 +527,139 @@ def execute_tool(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
             }
         }
     
+    elif intent == "schedule_exam_with_student_id":
+        # Handle scheduling when student ID (email) is provided
+        student_id = tool_args.get("student_id")
+        exam_id = tool_args.get("exam_id")
+        
+        if not student_id:
+            return {
+                **state,
+                "tool_name": "schedule_exam_workflow",
+                "tool_result": {
+                    "status": False,
+                    "message": "I need your email address to schedule an exam. Please provide your email.",
+                    "workflow_step": "need_student_id",
+                    "next_action": "Please provide your email address"
+                }
+            }
+        
+        # First, search for the student by email
+        try:
+            search_result = search_student_by_student_id_tool.invoke({
+                "instructor_id": instructor_id,
+                "student_id": student_id
+            })
+            
+            if search_result.get("found"):
+                user_id = search_result.get("user_id")
+                student_name = f"{search_result.get('student', {}).get('FIRSTNAME', '')} {search_result.get('student', {}).get('LASTNAME', '')}"
+                
+                # If exam_id is provided, try to schedule directly
+                if exam_id:
+                    try:
+                        schedule_result = schedule_exam_tool.invoke({
+                            "instructor_id": instructor_id,
+                            "exam_id": exam_id,
+                            "user_id": user_id
+                        })
+                        
+                        if schedule_result.get("status"):
+                            return {
+                                **state,
+                                "tool_name": "schedule_exam_with_student_id",
+                                "tool_result": {
+                                    "status": True,
+                                    "message": f"✅ Exam scheduled successfully for {student_name}!",
+                                    "student_name": student_name,
+                                    "user_id": user_id,
+                                    "exam_id": exam_id
+                                }
+                            }
+                        else:
+                            return {
+                                **state,
+                                "tool_name": "schedule_exam_with_student_id",
+                                "tool_result": {
+                                    "status": False,
+                                    "message": f"❌ Failed to schedule exam: {schedule_result.get('message', 'Unknown error')}",
+                                    "student_name": student_name,
+                                    "user_id": user_id,
+                                    "suggestion": "Please try again or contact support"
+                                }
+                            }
+                    except Exception as e:
+                        return {
+                            **state,
+                            "tool_name": "schedule_exam_with_student_id",
+                            "tool_result": {
+                                "status": False,
+                                "message": f"❌ Error scheduling exam: {str(e)}",
+                                "student_name": student_name,
+                                "user_id": user_id
+                            }
+                        }
+                else:
+                    # No specific exam provided, show available exams
+                    try:
+                        exams_result = list_exams_tool.invoke({"instructor_id": instructor_id})
+                        if exams_result.get("status") and exams_result.get("exams"):
+                            active_exams = [exam for exam in exams_result["exams"] if exam.get("EXAMSTATE") == "Active"]
+                            return {
+                                **state,
+                                "tool_name": "schedule_exam_with_student_id",
+                                "tool_result": {
+                                    "status": True,
+                                    "message": f"✅ Found your account: {student_name} (User ID: {user_id})",
+                                    "student_name": student_name,
+                                    "user_id": user_id,
+                                    "available_exams": active_exams,
+                                    "workflow_step": "select_exam",
+                                    "next_action": f"Please specify which exam you'd like to schedule. Available active exams: {', '.join([exam.get('EXAMNAME', 'Unknown') for exam in active_exams])}"
+                                }
+                            }
+                        else:
+                            return {
+                                **state,
+                                "tool_name": "schedule_exam_with_student_id",
+                                "tool_result": {
+                                    "status": False,
+                                    "message": "❌ No active exams available for scheduling",
+                                    "student_name": student_name,
+                                    "user_id": user_id
+                                }
+                            }
+                    except Exception as e:
+                        return {
+                            **state,
+                            "tool_name": "schedule_exam_with_student_id",
+                            "tool_result": {
+                                "status": False,
+                                "message": f"❌ Error getting available exams: {str(e)}",
+                                "student_name": student_name,
+                                "user_id": user_id
+                            }
+                        }
+            else:
+                return {
+                    **state,
+                    "tool_name": "schedule_exam_with_student_id",
+                    "tool_result": {
+                        "status": False,
+                        "message": f"❌ No student account found with email: {student_id}",
+                        "suggestion": "You may need to create a new account first. Say 'I need to create a new account' to get started."
+                    }
+                }
+        except Exception as e:
+            return {
+                **state,
+                "tool_name": "schedule_exam_with_student_id",
+                "tool_result": {
+                    "status": False,
+                    "message": f"❌ Error looking up student account: {str(e)}"
+                }
+            }
+    
     elif intent == "create_student_workflow":
         # Handle the complete student creation workflow
         return {
@@ -624,7 +795,26 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
         tool_name = state["tool_name"]
         
         if "error" in tool_result:
-            response = f"❌ Error: {tool_result['error']}"
+            error_msg = tool_result['error']
+            response = f"❌ Error: {error_msg}\n\n"
+            
+            # Add specific guidance based on the error type and tool
+            if "400 Client Error: Bad Request" in error_msg:
+                if tool_name == "get_student":
+                    response += f"💡 **Note**: The User ID you provided is not valid. You can find valid User IDs by listing all students first with: 'Show me all students'"
+                elif tool_name == "get_exam_attempt":
+                    response += f"💡 **Note**: The User Exam ID you provided is not valid. You can find valid User Exam IDs by listing scheduled exams first with: 'Show me my scheduled exams'"
+                elif tool_name == "get_exam":
+                    response += f"💡 **Note**: The Exam ID you provided is not valid. You can find valid Exam IDs by listing all exams first with: 'Show me all available exams'"
+                else:
+                    response += f"💡 **Note**: The ID you provided is not valid. Please check your input and try again."
+            elif "500 Server Error: Internal Server Error" in error_msg:
+                if tool_name == "list_scheduled_exams":
+                    response += f"💡 **Note**: This might be due to server issues or no scheduled exams available. You can try scheduling an exam first."
+                else:
+                    response += f"💡 **Note**: This appears to be a server-side issue. Please try again later or contact support."
+            else:
+                response += f"💡 **Note**: Please check your input and try again. If the problem persists, contact support."
         else:
             # Format based on tool type
             if tool_name == "help":
@@ -673,7 +863,7 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
             
             elif tool_name == "list_students":
                 if tool_result.get("status"):
-                    students = tool_result.get("students", [])
+                    students = tool_result.get("students", []) or tool_result.get("student_list", [])
                     if students:
                         response = f"👥 Found {len(students)} student(s):\n\n"
                         for i, student in enumerate(students[:10], 1):  # Limit to 10
@@ -697,8 +887,14 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
                     response += f"**Student ID**: `{student.get('STUDENTID', 'Unknown')}`\n"
                     response += f"**Created**: {student.get('DATETIMECREATED', 'Unknown')}\n"
                     response += f"**Last Login**: {student.get('DATETIMELOGGED', 'Never')}\n"
+                    
+                    # Add group information if available
+                    if tool_result.get("student_groups"):
+                        groups = tool_result["student_groups"]
+                        response += f"**Groups**: {', '.join([g.get('GROUPNAME', '') for g in groups])}\n"
                 else:
-                    response = f"❌ Student not found: {tool_result.get('message', 'Unknown error')}"
+                    response = f"❌ Student not found: {tool_result.get('message', 'Unknown error')}\n\n"
+                    response += f"💡 **Note**: Make sure you're using a valid User ID. You can find User IDs by listing all students first."
             
             elif tool_name == "list_group_categories":
                 if tool_result.get("status"):
@@ -723,6 +919,27 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
                 if tool_result.get("next_action"):
                     response += f"📋 **Next Step**: {tool_result['next_action']}"
             
+            elif tool_name == "schedule_exam_with_student_id":
+                if tool_result.get("status"):
+                    if tool_result.get("message") and "scheduled successfully" in tool_result["message"]:
+                        response = f"✅ {tool_result['message']}\n\n"
+                        response += f"**Student**: {tool_result.get('student_name', 'Unknown')}\n"
+                        response += f"**User ID**: `{tool_result.get('user_id', 'Unknown')}`\n"
+                        response += f"**Exam ID**: `{tool_result.get('exam_id', 'Unknown')}`\n\n"
+                        response += f"💡 Your exam has been scheduled! You can now take the exam."
+                    elif tool_result.get("workflow_step") == "select_exam":
+                        response = f"✅ {tool_result['message']}\n\n"
+                        response += f"**Available Active Exams**:\n"
+                        for exam in tool_result.get("available_exams", []):
+                            response += f"• **{exam.get('EXAMNAME', 'Unknown')}** (ID: `{exam.get('EXAMID', 'Unknown')}`)\n"
+                        response += f"\n📋 **Next Step**: {tool_result.get('next_action', 'Please specify which exam you want to schedule')}"
+                    else:
+                        response = f"✅ {tool_result['message']}"
+                else:
+                    response = f"❌ {tool_result.get('message', 'Failed to process scheduling request')}\n\n"
+                    if tool_result.get("suggestion"):
+                        response += f"💡 **Suggestion**: {tool_result['suggestion']}"
+            
             elif tool_name == "create_student_workflow":
                 response = f"👤 {tool_result.get('message', 'Starting student creation workflow')}\n\n"
                 if tool_result.get("next_action"):
@@ -735,7 +952,7 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
                     response += f"**Name**: {student.get('FIRSTNAME', '')} {student.get('LASTNAME', '')}\n"
                     response += f"**Student ID**: `{student.get('STUDENTID', 'Unknown')}`\n"
                     response += f"**User ID**: `{student.get('USERID', 'Unknown')}`\n"
-                    response += f"**Email**: {student.get('EMAIL', 'Not provided')}\n\n"
+                    response += f"**Email**: {student.get('STUDENTID', 'Not provided')}\n\n"
                     response += f"💡 You can now schedule exams with this account!"
                 else:
                     response = f"❌ Failed to create student account: {tool_result.get('message', 'Unknown error')}"
@@ -750,8 +967,8 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
             
             elif tool_name == "list_scheduled_exams":
                 if tool_result.get("status"):
-                    scheduled_exams = tool_result.get("scheduledExams", [])
-                    if scheduled_exams:
+                    scheduled_exams = tool_result.get("scheduledExams", []) or tool_result.get("students", [])
+                    if scheduled_exams and len(scheduled_exams) > 0 and scheduled_exams[0] != {'NULL': None}:
                         response = f"📅 Found {len(scheduled_exams)} scheduled exam(s):\n\n"
                         for i, exam in enumerate(scheduled_exams, 1):
                             response += f"{i}. **{exam.get('EXAMNAME', 'Unknown')}**\n"
@@ -759,9 +976,11 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
                             response += f"   • User Exam ID: `{exam.get('USEREXAMID', 'Unknown')}`\n"
                             response += f"   • Scheduled: {exam.get('DATETIMESCHEDULED', 'Unknown')}\n\n"
                     else:
-                        response = "📅 No scheduled exams found."
+                        response = "📅 No scheduled exams found.\n\n"
+                        response += f"💡 **Note**: Students need to be scheduled for exams first. You can schedule exams using the exam scheduling workflow."
                 else:
-                    response = f"❌ Failed to list scheduled exams: {tool_result.get('message', 'Unknown error')}"
+                    response = f"❌ Failed to list scheduled exams: {tool_result.get('message', 'Unknown error')}\n\n"
+                    response += f"💡 **Note**: This might be due to server issues or no scheduled exams available."
             
             elif tool_name == "schedule_exam":
                 if tool_result.get("status"):
@@ -780,7 +999,8 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
                     response += f"**Started**: {attempt.get('DATETIMESTARTED', 'Unknown')}\n"
                     response += f"**Completed**: {attempt.get('DATETIMECOMPLETED', 'Not completed')}\n"
                 else:
-                    response = f"❌ Failed to get exam attempt: {tool_result.get('message', 'Unknown error')}"
+                    response = f"❌ Failed to get exam attempt: {tool_result.get('message', 'Unknown error')}\n\n"
+                    response += f"💡 **Note**: Make sure you're using a valid User Exam ID. You can find this by listing scheduled exams first."
             
             elif tool_name == "get_student_exam_statistics":
                 if tool_result.get("status") and tool_result.get("statistics"):
@@ -791,7 +1011,8 @@ def format_response(state: ExamBuilderAgentState) -> ExamBuilderAgentState:
                     response += f"**Score Percentage**: {stats.get('SCOREPERCENTAGE', 'Unknown')}%\n"
                     response += f"**Time Taken**: {stats.get('TIMETAKEN', 'Unknown')}\n"
                 else:
-                    response = f"❌ Failed to get exam statistics: {tool_result.get('message', 'Unknown error')}"
+                    response = f"❌ Failed to get exam statistics: {tool_result.get('message', 'Unknown error')}\n\n"
+                    response += f"💡 **Note**: Make sure you're using valid Student ID and User Exam ID. You can find these by listing students and scheduled exams first."
             
             elif tool_name == "search_student_by_student_id":
                 if tool_result.get("found"):
@@ -869,12 +1090,22 @@ conversation_state = {
     "ready_to_execute": False
 }
 
+# Global workflow instance
+workflow_instance = None
+
+def get_workflow():
+    """Get or create the workflow instance."""
+    global workflow_instance
+    if workflow_instance is None:
+        workflow_instance = create_workflow()
+    return workflow_instance
+
 # Main function to run the agent with conversation memory
 def run_exambuilder_agent_v2(user_input: str) -> str:
     """Run the ExamBuilder agent v2 with user input and return the response."""
     global conversation_state
     
-    workflow = create_workflow()
+    workflow = get_workflow()
     
     # Add the new user message to the conversation
     conversation_state["messages"].append(HumanMessage(content=user_input))
