@@ -1,2 +1,4 @@
 .env
 Figures/
+Misc/
+__pycache__/

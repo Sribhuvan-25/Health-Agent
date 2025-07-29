@@ -278,14 +278,17 @@ def schedule_exam(instructor_id: str, exam_id: str, user_id: str) -> Dict:
     """
     # First check if student is already scheduled for this exam
     scheduled_result = list_scheduled_exams(instructor_id, user_id=user_id, exam_id=exam_id)
-    if scheduled_result.get("status") and scheduled_result.get("scheduled_exams"):
-        # Student is already scheduled
-        return {
-            "status": False,
-            "message": "This student is already scheduled to take this exam.",
-            "returnCode": "STUDENT_ALREADY_SCHEDULED",
-            "already_scheduled": True
-        }
+    if scheduled_result.get("status"):
+        students = scheduled_result.get("students", [])
+        # Check if there are actual scheduled exams (not just {"NULL": null})
+        if students and len(students) > 0 and students[0] != {"NULL": None} and students[0].get("EXAMID"):
+            # Student is already scheduled for this specific exam
+            return {
+                "status": False,
+                "message": "This student is already scheduled to take this exam.",
+                "returnCode": "STUDENT_ALREADY_SCHEDULED",
+                "already_scheduled": True
+            }
     
     endpoint = f"instructor/{instructor_id}/student/exam/{exam_id}/schedule.json"
     

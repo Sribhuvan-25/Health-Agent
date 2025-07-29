@@ -56,11 +56,22 @@ pip install -r requirements.txt
 
 ### 2. Set Environment Variables
 
-Set your OpenAI API key as an environment variable:
+Create a `.env` file in the project root with your API keys:
 
 ```bash
-export OPENAI_API_KEY="your_openai_api_key_here"
+# Copy the example file
+cp .env.example .env
+
+# Edit the .env file with your actual API keys
+nano .env
 ```
+
+Required environment variables:
+- `OPENAI_API_KEY`: Your OpenAI API key (required)
+- `LANGSMITH_API_KEY`: Your LangSmith API key (optional, for telemetry)
+- `LANGSMITH_PROJECT`: LangSmith project name (optional, defaults to "exambuilder-agent")
+
+**Important**: Never commit your `.env` file to version control. It's already in `.gitignore`.
 
 The ExamBuilder API credentials are already configured in the code, but you can override them if needed:
 
