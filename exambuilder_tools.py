@@ -46,8 +46,22 @@ def _make_request(method: str, endpoint: str, data: Optional[Dict] = None, param
         return response.json()
     
     except requests.exceptions.RequestException as e:
+        # Try to get more specific error information
+        error_details = f"API request failed: {str(e)}"
+        if hasattr(e.response, 'text') and e.response is not None:
+            try:
+                # Try to parse JSON error response
+                error_json = e.response.json()
+                if 'error' in error_json:
+                    error_details = f"API request failed: {str(e)} - Server response: {error_json['error']}"
+                elif 'message' in error_json:
+                    error_details = f"API request failed: {str(e)} - Server response: {error_json['message']}"
+            except:
+                # If not JSON, include raw response text
+                error_details = f"API request failed: {str(e)} - Server response: {e.response.text[:200]}"
+        
         return {
-            "error": f"API request failed: {str(e)}",
+            "error": error_details,
             "status": False,
             "returnCode": "API_ERROR"
         }
@@ -262,19 +276,38 @@ def schedule_exam(instructor_id: str, exam_id: str, user_id: str) -> Dict:
     
     🔧 READY FOR TESTING
     """
-    endpoint = f"instructor/{instructor_id}/student/exam/{exam_id}/schedule.json"
-    data = {"userId": user_id}  # Fixed: use "userId" as shown in API docs
+    # First check if student is already scheduled for this exam
+    scheduled_result = list_scheduled_exams(instructor_id, user_id=user_id, exam_id=exam_id)
+    if scheduled_result.get("status") and scheduled_result.get("scheduled_exams"):
+        # Student is already scheduled
+        return {
+            "status": False,
+            "message": "This student is already scheduled to take this exam.",
+            "returnCode": "STUDENT_ALREADY_SCHEDULED",
+            "already_scheduled": True
+        }
     
+    endpoint = f"instructor/{instructor_id}/student/exam/{exam_id}/schedule.json"
+    
+    # Try the official API documentation format first: "userId" (capital I)
+    data = {"userId": user_id}
     result = _make_request("POST", endpoint, data=data)
+    
+    # If that fails with a specific error about the parameter, try the lowercase version
+    if "error" in result and ("userId" in str(result.get("error", "")).lower() or "parameter" in str(result.get("error", "")).lower()):
+        print(f"⚠️  Trying alternative parameter format: userid (lowercase)")
+        data = {"userid": user_id}  # Try lowercase version
+        result = _make_request("POST", endpoint, data=data)
     
     # Handle specific error cases based on API documentation
     if "error" in result:
         error_msg = result["error"]
-        if "STUDENT_ALREADY_SCHEDULED" in error_msg:
+        if "STUDENT_ALREADY_SCHEDULED" in error_msg or "already scheduled" in error_msg.lower():
             return {
                 "status": False,
-                "message": "This student is already scheduled to take this exam. Cannot schedule an exam in progress. Delete the exam attempt and reschedule or reset an exam in progress.",
-                "returnCode": "STUDENT_ALREADY_SCHEDULED"
+                "message": "This student is already scheduled to take this exam.",
+                "returnCode": "STUDENT_ALREADY_SCHEDULED",
+                "already_scheduled": True
             }
         elif "INVALID_INSTRUCTOR" in error_msg:
             return {
@@ -294,8 +327,19 @@ def schedule_exam(instructor_id: str, exam_id: str, user_id: str) -> Dict:
                 "message": "The API Key and API Secret combination was invalid",
                 "returnCode": "API_AUTHENTICATION_FAILED"
             }
+        else:
+            return {
+                "status": False,
+                "message": f"Failed to schedule exam: {error_msg}",
+                "returnCode": "UNKNOWN_ERROR"
+            }
     
-    return result
+    # If no error, the request was successful
+    return {
+        "status": True,
+        "message": "Exam scheduled successfully",
+        "data": result
+    }
 
 def get_exam_attempt(instructor_id: str, user_exam_id: str) -> Dict:
     """

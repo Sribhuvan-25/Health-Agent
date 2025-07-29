@@ -46,55 +46,54 @@ exam-agent/
 └── requirements.txt          # Python dependencies
 ```
 
-## 🚀 Setup
+## Setup
 
-### Prerequisites
+### 1. Install Dependencies
 
-- Python 3.8+
-- OpenAI API key
-- ExamBuilder API credentials
-
-### Installation
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone <repository-url>
-   cd exam-agent
-   ```
-2. **Install dependencies**:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Configure credentials**:
-
-   ```python
-   # In exambuilder_tools.py
-   API_KEY = "your_exambuilder_api_key"
-   API_SECRET = "your_exambuilder_api_secret"
-
-   # Set environment variable
-   export OPENAI_API_KEY="your_openai_api_key"
-   ```
-
-## 💻 Usage
-
-### Quick Start
-
-```python
-from exambuilder_agent import run_exambuilder_agent_v2
-
-# Simple queries
-response = run_exambuilder_agent_v2("List all available exams")
-response = run_exambuilder_agent_v2("Show me system status")
-response = run_exambuilder_agent_v2("What can you help me with?")
+```bash
+pip install -r requirements.txt
 ```
 
-### Interactive Demo
+### 2. Set Environment Variables
+
+Set your OpenAI API key as an environment variable:
+
+```bash
+export OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+The ExamBuilder API credentials are already configured in the code, but you can override them if needed:
+
+```bash
+export EXAMBUILDER_API_KEY="your_exambuilder_api_key"
+export EXAMBUILDER_API_SECRET="your_exambuilder_api_secret"
+```
+
+### 3. Run the Agent
+
+#### Interactive Demo
 
 ```bash
 python exambuilder_demo.py
+```
+
+#### Comprehensive Test Suite
+
+```bash
+python test_complete_workflow.py
+```
+
+#### Direct Usage
+
+```python
+from exambuilder_agent import run_exambuilder_agent_v2, reset_conversation
+
+# Reset conversation state
+reset_conversation()
+
+# Run a query
+response = run_exambuilder_agent_v2("What can you help me with?")
+print(response)
 ```
 
 ### Example Conversations
@@ -171,31 +170,6 @@ The agent can understand and process these types of requests:
 - **Student Queries**: "List students", "Find student", "Student details"
 - **Group Management**: "List groups", "Group categories"
 
-## 📊 Natural Language Processing
-
-The agent uses advanced NLP to:
-
-- **Extract Entities**: Names, IDs, dates, email addresses
-- **Handle Context**: Multi-turn conversations with memory
-- **Classify Intent**: Understand what the user wants to do
-- **Validate Input**: Ensure required information is present
-
-## 🛡️ Security & Authentication
-
-- **API Authentication**: Secure credential handling with base64 encoding
-- **Input Validation**: Comprehensive parameter checking
-- **Error Sanitization**: Safe error message handling
-- **Session Management**: Stateful conversation tracking
-
-## 🚨 Error Scenarios
-
-The agent gracefully handles:
-
-- **Invalid Credentials**: Clear authentication failure messages
-- **Missing Permissions**: Informative permission error explanations
-- **Network Issues**: Retry logic and connection error handling
-- **Invalid Input**: User-friendly validation messages
-
 ## 📚 Dependencies
 
 ```
@@ -204,27 +178,3 @@ langgraph>=0.1.0
 requests>=2.31.0
 python-dotenv>=1.0.0
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 📞 Support
-
-For questions or issues:
-
-- Create an issue in the repository
-- Contact the development team
-- Check the ExamBuilder API documentation
-
----
-
-**Built with ❤️ using LangGraph and ExamBuilder API**
