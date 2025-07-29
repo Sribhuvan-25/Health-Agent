@@ -12,9 +12,9 @@ import base64
 from typing import Dict, Optional
 
 # ExamBuilder API Configuration
-BASE_URL = "https://instructor.exambuilder.com/v2"
-API_KEY = "FE0F8C82239FF183"
-API_SECRET = "A227A6838F3D180A15E6D8ED"
+BASE_URL = ""
+API_KEY = ""
+API_SECRET = ""
 
 # Create base64 encoded credentials for Basic Auth
 credentials = f"{API_KEY}:{API_SECRET}"
