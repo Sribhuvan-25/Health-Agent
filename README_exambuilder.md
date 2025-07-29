@@ -5,25 +5,35 @@ A sophisticated LangGraph-based agent that integrates with the ExamBuilder API t
 ## 🎓 Features
 
 ### Student Management
-
+- **Create Students**: Register new students with personal information
 - **Student Search**: Find students by name or other criteria
 - **Student Details**: Retrieve comprehensive student profiles
+- **Update Records**: Modify student information
+- **Delete Students**: Remove student records
 
 ### Exam Management
-
 - **List Exams**: View all available exams
 - **Exam Details**: Get comprehensive exam information
 - **Exam Statistics**: Access detailed performance metrics
 
-### Group Management
+### Exam Scheduling
+- **Schedule Exams**: Book exam sessions for students
+- **Bulk Scheduling**: Schedule exams for multiple students
+- **View Scheduled Exams**: List all scheduled exam sessions
+- **Cancel Exams**: Unschedule exam attempts
+- **Exam Progress**: Reset or add time to exam attempts
 
+### Group Management
 - **List Groups**: View all student groups
 - **Group Details**: Get group information
+- **Group Members**: Manage group membership
+- **Unassigned Students**: Find ungrouped students
 
-### System Management
-
-- **System Status**: View API connection status and available resources
-- **Help System**: Interactive capability discovery
+### Reporting & Analytics
+- **Enrollment Reports**: Track exam enrollments
+- **Performance Reports**: Analyze student performance
+- **Group Analysis**: Compare group performance
+- **Date Range Reports**: Generate time-based analytics
 
 ## 🏗️ Architecture
 
@@ -42,14 +52,13 @@ exam-agent/
 ├── exambuilder_tools.py      # ExamBuilder API functions
 ├── exambuilder_agent.py      # LangGraph workflow implementation
 ├── exambuilder_demo.py       # Interactive demo script
-├── README.md                 # This file
+├── README_exambuilder.md     # This file
 └── requirements.txt          # Python dependencies
 ```
 
 ## 🚀 Setup
 
 ### Prerequisites
-
 - Python 3.8+
 - OpenAI API key
 - ExamBuilder API credentials
@@ -57,23 +66,22 @@ exam-agent/
 ### Installation
 
 1. **Clone the repository**:
-
    ```bash
    git clone <repository-url>
    cd exam-agent
    ```
-2. **Install dependencies**:
 
+2. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
-3. **Configure credentials**:
 
+3. **Configure credentials**:
    ```python
    # In exambuilder_tools.py
    API_KEY = "your_exambuilder_api_key"
    API_SECRET = "your_exambuilder_api_secret"
-
+   
    # Set environment variable
    export OPENAI_API_KEY="your_openai_api_key"
    ```
@@ -83,12 +91,12 @@ exam-agent/
 ### Quick Start
 
 ```python
-from exambuilder_agent import run_exambuilder_agent_v2
+from exambuilder_agent import run_exambuilder_agent
 
 # Simple queries
-response = run_exambuilder_agent_v2("List all available exams")
-response = run_exambuilder_agent_v2("Show me system status")
-response = run_exambuilder_agent_v2("What can you help me with?")
+response = run_exambuilder_agent("List all available exams")
+response = run_exambuilder_agent("Create a student named John Doe with email john@example.com")
+response = run_exambuilder_agent("Schedule exam 12345 for student 67890 tomorrow at 2 PM")
 ```
 
 ### Interactive Demo
@@ -99,48 +107,45 @@ python exambuilder_demo.py
 
 ### Example Conversations
 
-**System Capabilities:**
-
+**Creating a Student:**
 ```
-User: "What can you help me with?"
-Agent: "🎓 ExamBuilder Agent Capabilities:
-        1. List all available exams
-        2. Get detailed exam information
-        3. List all students
-        4. Get detailed student information
-        5. List group categories
-        6. Show system status"
+User: "I need to register a new student"
+Agent: "To complete this request, I need:
+        • Please provide the student's first name
+        • Please provide the student's last name  
+        • Please provide the student's email address"
+
+User: "Name is Alice Johnson, email alice.johnson@university.edu"
+Agent: "✅ Successfully created student with ID: abc123"
 ```
 
-**Listing Exams:**
-
+**Scheduling an Exam:**
 ```
-User: "List all available exams"
-Agent: "📝 Found 3 exam(s):
+User: "Schedule an exam for tomorrow"
+Agent: "To complete this request, I need:
+        • Please provide the exam ID
+        • Please provide the student ID"
 
-        1. **Pearson Test 1**
-           • ID: `0344b2749fc8e3118d04269aa02d2675`
-           • State: Inactive
-           • Created: 28-JUL-2025"
+User: "Exam ID is 456, student ID is abc123"
+Agent: "📅 Successfully scheduled exam! Attempt ID: def789"
 ```
 
 ## 🔧 API Integration
 
 ### ExamBuilder API Endpoints
 
-The agent integrates with these verified working ExamBuilder API endpoints:
+The agent integrates with these ExamBuilder API endpoints:
 
-- **Authentication**: `GET /validate.json` ✅
-- **Exams**: `GET /instructor/{id}/exam/list.json` ✅
-- **Exam Details**: `GET /instructor/{id}/exam/{exam_id}.json` ✅
-- **Students**: `GET /instructor/{id}/student/list.json` ✅
-- **Student Details**: `GET /instructor/{id}/student/{student_id}.json` ✅
-- **Groups**: `GET /instructor/{id}/category/list.json` ✅
+- **Authentication**: `GET /validate.json`
+- **Students**: `GET|POST|PUT|DELETE /instructor/{id}/student.json`
+- **Exams**: `GET /instructor/{id}/exam.json`
+- **Scheduling**: `GET|POST|DELETE /instructor/{id}/scheduledexam.json`
+- **Groups**: `GET /instructor/{id}/group.json`
+- **Reports**: `GET /instructor/{id}/report/...`
 
 ### Error Handling
 
 The agent includes comprehensive error handling:
-
 - API connection failures
 - Authentication errors
 - Missing parameters
@@ -166,18 +171,18 @@ graph TD
 
 The agent can understand and process these types of requests:
 
-- **System Queries**: "What can you do?", "Show status", "Help"
-- **Exam Management**: "List exams", "Show exam details", "Find Serengeti exam"
-- **Student Queries**: "List students", "Find student", "Student details"
-- **Group Management**: "List groups", "Group categories"
+- **Student Management**: "create student", "find student", "update student info"
+- **Exam Queries**: "list exams", "show exam details", "exam statistics"
+- **Scheduling**: "schedule exam", "cancel exam", "show my exams"
+- **Groups**: "list groups", "group members", "assign to group"
+- **Reports**: "enrollment report", "performance report"
 
 ## 📊 Natural Language Processing
 
 The agent uses advanced NLP to:
-
 - **Extract Entities**: Names, IDs, dates, email addresses
+- **Parse Dates**: "tomorrow at 2pm", "next Monday", "July 15th"
 - **Handle Context**: Multi-turn conversations with memory
-- **Classify Intent**: Understand what the user wants to do
 - **Validate Input**: Ensure required information is present
 
 ## 🛡️ Security & Authentication
@@ -190,11 +195,19 @@ The agent uses advanced NLP to:
 ## 🚨 Error Scenarios
 
 The agent gracefully handles:
-
 - **Invalid Credentials**: Clear authentication failure messages
 - **Missing Permissions**: Informative permission error explanations
 - **Network Issues**: Retry logic and connection error handling
 - **Invalid Input**: User-friendly validation messages
+
+## 🔮 Future Enhancements
+
+Potential improvements:
+- **Voice Interface**: Speech-to-text integration
+- **Multi-language**: Support for additional languages
+- **Advanced Analytics**: Machine learning insights
+- **Mobile App**: Native mobile applications
+- **Batch Operations**: Bulk data processing capabilities
 
 ## 📚 Dependencies
 
@@ -220,11 +233,10 @@ This project is licensed under the MIT License.
 ## 📞 Support
 
 For questions or issues:
-
 - Create an issue in the repository
 - Contact the development team
 - Check the ExamBuilder API documentation
 
 ---
 
-**Built with ❤️ using LangGraph and ExamBuilder API**
+**Built with ❤️ using LangGraph and ExamBuilder API** 
