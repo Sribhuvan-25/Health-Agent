@@ -21,6 +21,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langchain_core.tools import tool
 from dotenv import load_dotenv
+from langsmith import Client
 from exambuilder_tools import (
     get_instructor_id, list_exams, get_exam, list_students, get_student,
     list_group_categories, create_student, update_student, list_scheduled_exams,
@@ -29,6 +30,14 @@ from exambuilder_tools import (
 
 # Load environment variables
 load_dotenv()
+
+# Configure LangSmith for telemetry
+os.environ["LANGSMITH_TRACING_V2"] = "true"
+os.environ["LANGSMITH_API_KEY"] = "LANGSMITH_API_KEY_REMOVED"
+os.environ["LANGSMITH_PROJECT"] = "exambuilder-agent"
+
+# Initialize LangSmith client
+langsmith_client = Client()
 
 # State definition
 class ExamBuilderAgentState(TypedDict):
@@ -43,8 +52,12 @@ class ExamBuilderAgentState(TypedDict):
     cached_user_id: Annotated[Optional[str], "Cached user ID for a student to avoid repeated lookups"]
     cached_student_id: Annotated[Optional[str], "Cached student ID (email) corresponding to the user ID"]
 
-# Initialize LLM
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+# Initialize LLM with tracing
+llm = ChatOpenAI(
+    model="gpt-3.5-turbo", 
+    temperature=0,
+    tags=["exambuilder-agent", "gpt-3.5-turbo"]
+)
 
 # Define tools based on working endpoints
 @tool
