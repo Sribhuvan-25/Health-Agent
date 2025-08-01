@@ -37,13 +37,14 @@ AI-powered exam management system built with proper LangGraph architecture.
 ```mermaid
 graph TD
     A[User Input] --> B[Intent Classifier]
-    B --> C[Entity Extractor]
+    B --> C[Entity Extractor]  
     C --> D[Validation]
     D --> E{Missing Info?}
     E -->|Yes| F[Ask for Info]
     E -->|No| G[Tool Execution]
-    G --> H[Response Formatter]
     F --> I[User Response]
+    I --> B
+    G --> H[Response Formatter]
     H --> J[Final Answer]
     
     style A fill:#e1f5fe
