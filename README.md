@@ -5,22 +5,23 @@ AI-powered exam management system built with proper LangGraph architecture.
 ## 🚀 Quick Start
 
 1. **Setup Environment**:
+
    ```bash
    cp .env.template .env
    # Add your OPENAI_API_KEY to .env
    ```
-
 2. **Install Dependencies**:
+
    ```bash
    pip install -r requirements.txt
    ```
-
 3. **Run Application**:
+
    ```bash
    python start_langgraph_agent.py
    ```
-
 4. **Access Interface**:
+
    - **Web UI**: http://localhost:8002
    - **API Docs**: http://localhost:8002/docs
 
@@ -37,7 +38,7 @@ AI-powered exam management system built with proper LangGraph architecture.
 ```mermaid
 graph TD
     A[User Input] --> B[Intent Classifier]
-    B --> C[Entity Extractor]  
+    B --> C[Entity Extractor]
     C --> D[Validation]
     D --> E{Missing Info?}
     E -->|Yes| F[Ask for Info]
@@ -68,7 +69,8 @@ graph TD
 
 ## 📁 Core Files
 
-- `agent.py` - Main LangGraph agent implementation
+- 
+-  `agent.py` - Main LangGraph agent implementation
 - `fastapi_app_langgraph.py` - Web server with chat UI
 - `exambuilder_tools.py` - API integration functions
 - `tool_registry.py` - Dynamic tool discovery system
@@ -77,6 +79,7 @@ graph TD
 ## 🔧 Configuration
 
 Required environment variables in `.env`:
+
 ```bash
 OPENAI_API_KEY=your_openai_key_here
 EXAMBUILDER_API_KEY=FE0F8C82239FF183
@@ -84,6 +87,7 @@ EXAMBUILDER_API_SECRET=A227A6838F3D180A15E6D8ED
 ```
 
 Optional:
+
 ```bash
 LANGSMITH_API_KEY=your_langsmith_key
 LLM_MODEL=gpt-3.5-turbo
@@ -99,6 +103,7 @@ python test_langgraph_agent.py
 ## 🎯 LangGraph Implementation
 
 This is a **proper LangGraph agent** with:
+
 - ✅ StateGraph with TypedDict state management
 - ✅ 5 specialized nodes with clear responsibilities
 - ✅ Conditional routing and memory persistence
