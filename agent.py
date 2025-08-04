@@ -138,38 +138,38 @@ def intent_classifier_node(state: AgentState) -> AgentState:
     context = "\n".join(reversed(recent_messages))
     
     prompt = f"""
-You are an intent classifier for an exam management system.
+        You are an intent classifier for an exam management system.
 
-User input: "{latest_message}"
-Previous intent: {previous_intent}
+        User input: "{latest_message}"
+        Previous intent: {previous_intent}
 
-Recent conversation context:
-{context}
+        Recent conversation context:
+        {context}
 
-Available intents:
-- list_exams: User wants to see available exams
-- get_exam: User wants details about a specific exam  
-- list_students: User wants to see students
-- get_student: User wants details about a specific student
-- create_student: User wants to create a new student account
-- schedule_exam: User wants to schedule an exam for a student
-- list_scheduled_exams: User wants to see their scheduled/registered exams
-- get_results: User wants to see exam results
-- help: User needs help
-- status: User wants system status
+        Available intents:
+        - list_exams: User wants to see available exams
+        - get_exam: User wants details about a specific exam  
+        - list_students: User wants to see students
+        - get_student: User wants details about a specific student
+        - create_student: User wants to create a new student account
+        - schedule_exam: User wants to schedule an exam for a student
+        - list_scheduled_exams: User wants to see their scheduled/registered exams
+        - get_results: User wants to see exam results
+        - help: User needs help
+        - status: User wants system status
 
-IMPORTANT RULES:
-1. If user is providing missing information for previous intent, keep the same intent
-2. Look for keywords: 
-   - "register", "schedule" = schedule_exam
-   - "results" = get_results
-   - "create", "new account" = create_student
-   - "show", "my exams", "scheduled", "registered" = list_scheduled_exams
-3. If user says single words/names after create_student context, maintain create_student intent
-4. If user provides student ID after asking for registration, maintain schedule_exam intent
+        IMPORTANT RULES:
+        1. If user is providing missing information for previous intent, keep the same intent
+        2. Look for keywords: 
+        - "register", "schedule" = schedule_exam
+        - "results" = get_results
+        - "create", "new account" = create_student
+        - "show", "my exams", "scheduled", "registered" = list_scheduled_exams
+        3. If user says single words/names after create_student context, maintain create_student intent
+        4. If user provides student ID after asking for registration, maintain schedule_exam intent
 
-Respond with ONLY the intent name, nothing else.
-"""
+        Respond with ONLY the intent name, nothing else.
+    """
     
     try:
         with trace("intent_classification"):
@@ -208,6 +208,7 @@ def entity_extractor_node(state: AgentState) -> AgentState:
     
     # Get previous entities to maintain context
     previous_entities = state.get("extracted_entities", {})
+    missing_info = state.get("missing_info", [])
     
     # Get conversation context (last few messages)
     recent_messages = []
@@ -220,38 +221,53 @@ def entity_extractor_node(state: AgentState) -> AgentState:
     context = "\n".join(reversed(recent_messages))
     
     prompt = f"""
-Extract entities from this user input: "{latest_message}"
+        Extract entities from this user input: "{latest_message}"
 
-Intent: {intent}
-Previous entities found: {previous_entities}
+        Intent: {intent}
+        Previous entities found: {previous_entities}
+        Missing information: {missing_info}
 
-Recent conversation context:
-{context}
+        Recent conversation context:
+        {context}
 
-Extract ONLY the following entities if present:
-- student_id: Email addresses or student IDs (like "SAMPLE+2523350510825", "john@example.com")
-- exam_id: Exam IDs (usually alphanumeric strings)
-- exam_name: Exam names (like "Serengeti Certification", "Pearson Test 1", "Serengeti Practice Exam")
-- first_name: First names
-- last_name: Last names
-- email: Email addresses  
-- password: Passwords
+        CONTEXT ANALYSIS:
+        - If intent is "create_student" and missing first_name: extract single word/name as first_name (e.g., "Tim" → first_name:"Tim")
+        - If intent is "create_student" and missing last_name: extract single word/name as last_name (e.g., "David" → last_name:"David")  
+        - If intent is "create_student" and missing student_id: extract any string as student_id (e.g., "Tim1212" → student_id:"Tim1212")
+        - If intent is "create_student" and missing password: extract any input as password
+        - For simple single-word inputs, map to the FIRST missing field in this order: first_name, last_name, student_id, password
+        - Simple inputs in create_student context should be mapped to missing fields
 
-IMPORTANT RULES:
-1. If the user mentions "Serengetic" they likely mean "Serengeti"
-2. Look for student IDs in formats like "SAMPLE+numbers" or email addresses
-3. For exam names, check for partial matches (e.g., "Serengetic" → "Serengeti Certification")
-4. Preserve previously extracted entities if they're still relevant
-5. If user says "my student ID is X", extract X as student_id
-6. If user mentions an exam name, extract it even if spelled slightly wrong
-7. Parse comma-separated values: "John, Doe, password123" = first_name:"John", last_name:"Doe", password:"password123"
-8. Look for patterns like "John Doe" for first and last names
-9. If user provides just a password after previous info, extract it as password
-10. For create student intent, look for: first name, last name, email/student_id, password in any format
+        Extract ONLY the following entities if present:
+        - student_id: Any student identifier including email addresses, usernames, or IDs (like "SAMPLE+2523350510825", "john@example.com", "john123")
+        - exam_id: Exam IDs (usually alphanumeric strings)
+        - exam_name: Exam names (like "Serengeti Certification", "Pearson Test 1", "Serengeti Practice Exam")
+        - first_name: First names
+        - last_name: Last names
+        - password: Passwords
 
-Respond with a JSON object containing only the found entities.
-Example: {{"student_id": "SAMPLE+2523350510825", "exam_name": "Serengeti Certification"}}
-"""
+        IMPORTANT RULES:
+        1. If the user mentions "Serengetic" they likely mean "Serengeti"
+        2. Extract email addresses as student_id (emails are valid student IDs)
+        3. For exam names, check for partial matches (e.g., "Serengetic" → "Serengeti Certification")
+        4. Preserve previously extracted entities if they're still relevant
+        5. If user says "my student ID is X" or "my email is X", extract X as student_id
+        6. If user mentions an exam name, extract it even if spelled slightly wrong
+        7. Parse comma-separated values: "John, Doe, password123" = first_name:"John", last_name:"Doe", password:"password123"
+        8. Look for patterns like "John Doe" for first and last names
+        9. For create_student intent: if user gives simple input, map to the missing field (single word usually goes to the currently missing field)
+        10. Extract "Tim" as first_name, "David" as last_name, "Tim1212" as student_id, "MyPass123" as password based on context
+        11. When user provides an email address, always extract it as student_id, not as a separate email field
+        12. Pattern matching: "my [field] is X" should extract X as that field
+
+        Respond with a JSON object containing only the found entities.
+        Examples:
+        - Input "Tim" (when expecting first_name) → {{"first_name": "Tim"}}
+        - Input "David" (when expecting last_name) → {{"last_name": "David"}}
+        - Input "My last name is David" → {{"last_name": "David"}}
+        - Input "Tim1212" (when expecting student_id) → {{"student_id": "Tim1212"}}
+        - Input "JohnDoe" (when expecting password) → {{"password": "JohnDoe"}}
+    """
     
     try:
         with trace("entity_extraction"):
@@ -464,6 +480,22 @@ def tool_execution_node(state: AgentState) -> AgentState:
             else:
                 results["error"] = "Student not found"
         
+        elif intent == "create_student":
+            first_name = entities.get("first_name")
+            last_name = entities.get("last_name")
+            student_id = entities.get("student_id")
+            password = entities.get("password")
+            
+            result = tool_registry.execute_tool(
+                "create_student",
+                instructor_id=instructor_id,
+                first_name=first_name,
+                last_name=last_name,
+                student_id=student_id,
+                password=password
+            )
+            results["create_student"] = result.get("data", result)
+        
         elif intent == "list_students":
             result = tool_registry.execute_tool("list_students", instructor_id=instructor_id)
             if result.get("status"):
@@ -640,10 +672,10 @@ I'll help you create a new student account. I need a few details:
 """
     elif "student_id" in missing_info:
         first_name = entities.get("first_name", "")
-        return f"""🤖 **Email Address Needed**
+        return f"""🤖 **Student ID Needed**
 
-Great! Hi {first_name}. **Please provide your email address (this will be your student ID).**
-**Example:** "My email is john.doe@example.com"
+Great! Hi {first_name}. **Please provide a student ID for your account.**
+**Example:** "My student ID is Tim1212" or just "Tim1212"
 """
     elif "password" in missing_info:
         first_name = entities.get("first_name", "")
@@ -802,6 +834,31 @@ The exam has been scheduled and the student can now take it.
         else:
             response_text += "**Status:** No exam attempt data found.\n"
             response_text += "This student may not have started the exam yet.\n"
+    
+    elif intent == "create_student" and "create_student" in context:
+        student_result = context["create_student"]
+        entities = state.get("extracted_entities", {})
+        first_name = entities.get("first_name", "")
+        student_id = entities.get("student_id", "")
+        
+        if student_result.get("status"):
+            response_text = f"""
+### ✅ Student Account Created Successfully!
+
+**Name:** {first_name}
+**Student ID:** {student_id}
+
+Your account has been created and you can now register for exams!
+"""
+        else:
+            error_msg = student_result.get("error", "Unknown error occurred")
+            response_text = f"""
+### ❌ Account Creation Failed
+
+**Error:** {error_msg}
+
+Please try again or contact support if the problem persists.
+"""
     
     elif intent == "list_students" and "students" in context:
         students = context["students"].get("students", [])
