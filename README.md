@@ -63,8 +63,8 @@ graph TD
 
 - **LangGraph**: StateGraph with proper node architecture
 - **FastAPI**: Web server with built-in chat UI
-- **OpenAI**: GPT-3.5-turbo for intent classification and entity extraction
-- **LangSmith**: Telemetry and tracing (optional)
+- **Multi-LLM Support**: OpenAI, Google Gemini, and VertexAI
+- **LangSmith**: Distributed tracing and telemetry (optional)
 - **ExamBuilder API**: Backend exam management system
 
 ## 📁 Core Files
@@ -81,7 +81,13 @@ graph TD
 Required environment variables in `.env`:
 
 ```bash
-OPENAI_API_KEY=your_openai_key_here
+# LLM Provider Configuration
+LLM_PROVIDER=openai  # openai, gemini, or vertexai
+OPENAI_API_KEY=your_openai_key_here  # if using OpenAI
+GOOGLE_API_KEY=your_google_key_here  # if using Gemini
+GOOGLE_CLOUD_PROJECT=your-project-id  # if using VertexAI
+
+# ExamBuilder API
 EXAMBUILDER_API_KEY=FE0F8C82239FF183
 EXAMBUILDER_API_SECRET=A227A6838F3D180A15E6D8ED
 ```
@@ -89,7 +95,7 @@ EXAMBUILDER_API_SECRET=A227A6838F3D180A15E6D8ED
 Optional:
 
 ```bash
-LANGSMITH_API_KEY=your_langsmith_key
+LANGSMITH_API_KEY=your_langsmith_key  # for telemetry
 LLM_MODEL=gpt-3.5-turbo
 PORT=8002
 ```
@@ -104,12 +110,21 @@ python test_langgraph_agent.py
 
 This is a **proper LangGraph agent** with:
 
-- ✅ StateGraph with TypedDict state management
-- ✅ 5 specialized nodes with clear responsibilities
-- ✅ Conditional routing and memory persistence
-- ✅ Thread-based session management
-- ✅ Dynamic tool integration
+- ✅ **StateGraph Architecture**: TypedDict state management with 5 specialized nodes
+- ✅ **Node Pipeline**: Intent Classification → Entity Extraction → Validation → Tool Execution → Response Formatting
+- ✅ **Conditional Routing**: Smart flow control based on missing information
+- ✅ **Memory Persistence**: Thread-based session management with MemorySaver
+- ✅ **Dynamic Tool Integration**: Auto-discovery and registration of ExamBuilder API tools
+
+## 📊 LangSmith Telemetry
+
+Built-in observability and monitoring:
+
+- ✅ **Distributed Tracing**: Track requests across all LangGraph nodes
+- ✅ **Performance Metrics**: Monitor LLM calls, latency, and token usage
+- ✅ **Debug Insights**: Inspect conversation flows and entity extraction
+- ✅ **Error Tracking**: Capture and analyze failures in the agent pipeline
 
 ---
 
-Built with ❤️ using LangGraph, FastAPI, and OpenAI
+Built with ❤️ using LangGraph, FastAPI, and Multi-LLM Support
