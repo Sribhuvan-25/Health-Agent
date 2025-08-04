@@ -15,8 +15,13 @@ class Config:
     
     # API Configuration
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
     LANGSMITH_API_KEY: str = os.getenv("LANGSMITH_API_KEY", "")
     LANGSMITH_PROJECT: str = os.getenv("LANGSMITH_PROJECT", "exambuilder-multi-agent")
+    
+    # VertexAI Configuration
+    GOOGLE_CLOUD_PROJECT: str = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+    GOOGLE_CLOUD_LOCATION: str = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     
     # ExamBuilder API Configuration
     EXAMBUILDER_API_KEY: str = os.getenv("EXAMBUILDER_API_KEY", "FE0F8C82239FF183")
@@ -24,6 +29,7 @@ class Config:
     EXAMBUILDER_BASE_URL: str = os.getenv("EXAMBUILDER_BASE_URL", "https://instructor.exambuilder.com/v2")
     
     # LLM Configuration
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")  # "openai", "gemini", or "vertexai"
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0"))
     LLM_MAX_TOKENS: Optional[int] = int(os.getenv("LLM_MAX_TOKENS", "1000")) if os.getenv("LLM_MAX_TOKENS") else None
@@ -45,10 +51,17 @@ class Config:
     def validate(cls) -> bool:
         """Validate required configuration"""
         required_vars = [
-            "OPENAI_API_KEY",
             "EXAMBUILDER_API_KEY", 
             "EXAMBUILDER_API_SECRET"
         ]
+        
+        # Validate LLM provider API key
+        if cls.LLM_PROVIDER == "openai" and not cls.OPENAI_API_KEY:
+            required_vars.append("OPENAI_API_KEY")
+        elif cls.LLM_PROVIDER == "gemini" and not cls.GOOGLE_API_KEY:
+            required_vars.append("GOOGLE_API_KEY")
+        elif cls.LLM_PROVIDER == "vertexai" and not cls.GOOGLE_CLOUD_PROJECT:
+            required_vars.append("GOOGLE_CLOUD_PROJECT")
         
         missing_vars = []
         for var in required_vars:

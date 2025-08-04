@@ -8,7 +8,7 @@ AI-powered exam management system built with proper LangGraph architecture.
 
    ```bash
    cp .env.template .env
-   # Add your OPENAI_API_KEY to .env
+   # Add your API keys to .env (see Configuration section)
    ```
 2. **Install Dependencies**:
 
@@ -47,7 +47,7 @@ graph TD
     I --> B
     G --> H[Response Formatter]
     H --> J[Final Answer]
-    
+  
     style A fill:#e1f5fe
     style J fill:#f1f8e9
 ```
@@ -70,7 +70,7 @@ graph TD
 ## 📁 Core Files
 
 - 
--  `agent.py` - Main LangGraph agent implementation
+- `agent.py` - Main LangGraph agent implementation
 - `fastapi_app_langgraph.py` - Web server with chat UI
 - `exambuilder_tools.py` - API integration functions
 - `tool_registry.py` - Dynamic tool discovery system

@@ -7,7 +7,9 @@ import json
 import os
 from typing import Dict, List, Optional, Any, TypedDict, Annotated
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -17,6 +19,7 @@ from tool_registry import get_tool_registry
 from config import get_config
 import langsmith
 from langsmith import trace
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +30,73 @@ config = get_config()
 # Setup LangSmith tracing
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "exambuilder-langgraph-agent"
+
+# ============================================================================
+# LLM HELPER FUNCTIONS
+# ============================================================================
+
+class VertexAIGemini(BaseLanguageModel):
+    """Custom VertexAI Gemini wrapper using Google Generative AI client with CLI auth"""
+    
+    def __init__(self, model: str, temperature: float = 0.0, max_tokens: Optional[int] = None):
+        super().__init__()
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        
+        # Configure with CLI authentication (no API key needed)
+        # Uses application default credentials from gcloud auth
+        genai.configure()
+        self.client = genai.GenerativeModel(model_name=model)
+    
+    def invoke(self, prompt: str) -> AIMessage:
+        """Generate content using Gemini model"""
+        try:
+            # Configure generation parameters
+            generation_config = genai.types.GenerationConfig(
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens
+            )
+            
+            # Generate content
+            response = self.client.generate_content(
+                contents=prompt,
+                generation_config=generation_config
+            )
+            
+            # Return as AIMessage for LangChain compatibility
+            return AIMessage(content=response.text)
+            
+        except Exception as e:
+            print(f"VertexAI Gemini error: {e}")
+            return AIMessage(content="I apologize, but I'm having trouble processing your request right now.")
+    
+    @property
+    def _llm_type(self) -> str:
+        return "vertexai_gemini"
+
+def get_llm():
+    """Get the appropriate LLM based on configuration"""
+    if config.LLM_PROVIDER == "vertexai":
+        return VertexAIGemini(
+            model=config.LLM_MODEL,
+            temperature=config.LLM_TEMPERATURE,
+            max_tokens=config.LLM_MAX_TOKENS
+        )
+    elif config.LLM_PROVIDER == "gemini":
+        return ChatGoogleGenerativeAI(
+            model=config.LLM_MODEL,
+            temperature=config.LLM_TEMPERATURE,
+            google_api_key=config.GOOGLE_API_KEY,
+            max_tokens=config.LLM_MAX_TOKENS
+        )
+    else:  # Default to OpenAI
+        return ChatOpenAI(
+            model=config.LLM_MODEL,
+            temperature=config.LLM_TEMPERATURE,
+            openai_api_key=config.OPENAI_API_KEY,
+            max_tokens=config.LLM_MAX_TOKENS
+        )
 
 # ============================================================================
 # STATE DEFINITION
@@ -92,11 +162,7 @@ def create_langgraph_tools():
 def intent_classifier_node(state: AgentState) -> AgentState:
     """Classify user intent from the latest message"""
     
-    llm = ChatOpenAI(
-        model=config.LLM_MODEL,
-        temperature=config.LLM_TEMPERATURE,
-        openai_api_key=config.OPENAI_API_KEY
-    )
+    llm = get_llm()
     
     # Get the latest human message
     latest_message = None
@@ -188,11 +254,7 @@ def intent_classifier_node(state: AgentState) -> AgentState:
 def entity_extractor_node(state: AgentState) -> AgentState:
     """Extract entities from user input"""
     
-    llm = ChatOpenAI(
-        model=config.LLM_MODEL,
-        temperature=config.LLM_TEMPERATURE,
-        openai_api_key=config.OPENAI_API_KEY
-    )
+    llm = get_llm()
     
     # Get the latest human message
     latest_message = None
@@ -693,11 +755,7 @@ I have all the information needed. Let me create your student account!
 def response_formatter_node(state: AgentState) -> AgentState:
     """Format the final response"""
     
-    llm = ChatOpenAI(
-        model=config.LLM_MODEL,
-        temperature=config.LLM_TEMPERATURE,
-        openai_api_key=config.OPENAI_API_KEY
-    )
+    llm = get_llm()
     
     intent = state.get("current_intent", "")
     missing_info = state.get("missing_info", [])
