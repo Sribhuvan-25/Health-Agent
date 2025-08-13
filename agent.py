@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -84,10 +85,9 @@ def get_llm():
             max_tokens=config.LLM_MAX_TOKENS
         )
     elif config.LLM_PROVIDER == "gemini":
-        return ChatGoogleGenerativeAI(
+        return ChatVertexAI(
             model=config.LLM_MODEL,
             temperature=config.LLM_TEMPERATURE,
-            google_api_key=config.GOOGLE_API_KEY,
             max_tokens=config.LLM_MAX_TOKENS
         )
     else:  # Default to OpenAI
